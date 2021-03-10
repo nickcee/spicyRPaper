@@ -1,0 +1,21 @@
+###################
+### Simulations ###
+###################
+
+Scripts:
+simulationRun.R - performs simulations as described in the manuscript
+simulationPlot.R - reproduces results of the simulations presented in the manuscript
+
+Data:
+resultsTW.Rdata - results of simulations without weights
+resultsFW.Rdata - results of simulations with weights
+
+###############
+### Figures ###
+###############
+
+Scripts:
+diabetesHeatmap.R - applies SpicyR to diabetes dataset and produces the heatmap presented in the manuscript
+
+Data:
+data.rds - single cell data from Damond et al. 2019, converted into a SegmentedCells object for use with SpicyR
