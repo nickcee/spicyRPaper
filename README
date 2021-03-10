@@ -1,6 +1,6 @@
-###################
-### Simulations ###
-###################
+##########################
+### Simulation Figures ###
+#########################
 
 Scripts:
 simulationRun.R - performs simulations as described in the manuscript
@@ -10,9 +10,9 @@ Data:
 resultsTW.Rdata - results of simulations without weights
 resultsFW.Rdata - results of simulations with weights
 
-###############
-### Figures ###
-###############
+########################
+### Diabetes Figures ###
+########################
 
 Scripts:
 diabetesHeatmap.R - applies SpicyR to diabetes dataset and produces the heatmap presented in the manuscript
