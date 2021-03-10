@@ -1,4 +1,4 @@
-data <- readRDS("data.rds")
+data <- load("data.rda")
 
 set.seed(57713)
 spicyTest <- spicy(data, 
