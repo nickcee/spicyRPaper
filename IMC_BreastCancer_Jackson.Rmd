@@ -1,0 +1,141 @@
+---
+title: "Jackson data"
+author: "Ellis Patrick"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(spicyR))
+suppressPackageStartupMessages(library(imcdatasets))
+ncores <- 20
+
+```
+
+# Summary
+
+This analysis assessed if there are changes in colocalisation associated with whether a patient breast cancer patient's tumour had metastasized to the lymph nodes. This used a subset of the Jackson et al (2020) data available on Bioconductor in the imcdatasets package. Node positivity is binary, there is only one image per patient in this subset of the data and we include age and tumour size as covariates in the models.
+
+* There were no pairs with FDR < 0.05.
+* There were also no more p-value < 0.05 than expected by chance as shown by the relatively flat p-value histogram.
+
+
+# Read in Data
+
+```{r}
+sce <- JacksonFischer2020Data(data_type = "sce")
+
+data <- colData(sce) %>%
+  as.data.frame() %>%
+  mutate(imageID = ImageNb, imageCellID = CellNb, subject = PID, x = Location_Center_X, y = Location_Center_Y, cellType = as.factor(metacluster))
+
+phenotype <- c("imageID", "grade", "tumor_size",      "gender",    "age",          "Patientstatus",      "PTNM_T",      "PTNM_N",
+               "diseasestatus", "PrimarySite", "ERStatus",    "PRStatus",  "HER2Status", 
+               "DFSmonth",   "OSmonth", "TripleNegDuctal", "microinvasion", "Subtype",       "HR", "clinical_type", "subject")
+
+
+
+
+```
+
+## Clean clinical data
+
+We define the variable "nodePositive" to use as the variable of interest.
+
+```{r}
+
+pheno <- unique(data[, phenotype])
+pheno[ pheno == ""] <- NA
+
+pheno$nodePositive <- 1
+pheno$nodePositive[pheno$PTNM_N%in%c("0", "0sl", "0sn")] <- 0
+
+rownames(pheno) <- pheno$imageID
+
+cellAnnotations <- c("PhenoGraphBasel", "X.tumorcells", "X.normalepithelialcells", "X.stroma", "X.inflammatorycells")
+
+cellExp <- data %>%
+  filter(imageID %in% rownames(pheno)[!is.na(pheno$nodePositive)]) %>%
+  SegmentedCells(cellAnnotations = cellAnnotations)
+
+imagePheno(cellExp) <- pheno[rownames(cellExp),]
+
+
+```
+
+## Remove cell types with low prevalence
+
+```{r}
+cellProp <- table(imageID(cellExp),cellType(cellExp))
+dropCellTypes <- names(which(colMeans(cellProp==0)>0.6))
+cellExp <- filterCells(cellExp, !cellType(cellExp)%in%c(dropCellTypes))
+cellType(cellExp) <- factor(as.character(cellType(cellExp)))
+```
+
+
+# Run spicyR
+
+## Run spicyR with linear model.
+
+Which cell type pairs have changes in co-localisation associated with node positivity. We have included age and tumour size as covariates. There is just one image per patient in this subset of the data.
+
+
+```{r runSpicyR}
+
+t1 <- Sys.time()
+
+
+spicyTest <- spicy(cellExp, 
+                   condition = "nodePositive", 
+                   covariates = c("age", "tumor_size"),
+                   BPPARAM = BiocParallel::MulticoreParam(ncores),
+                   includeZeroCells = FALSE
+                  )
+t2 <- Sys.time()
+
+t2 - t1
+
+```
+
+```{r}
+topPairs(spicyTest, n = 20)
+```
+
+## Look at weights
+
+
+```{r jackson_weights, fig.height=5, fig.width=6}
+w <- spicyTest$weights
+nCells <- spicyTest$nCells
+m1 <- unlist(lapply(strsplit(names(w), "__"), function(x)x[1]))
+m2 <- unlist(lapply(strsplit(names(w), "__"), function(x)x[2]))
+counts1 <- as.vector(nCells[,m1])
+counts2 <- as.vector(nCells[,m2])
+df <- data.frame(counts1, counts2, weights = unlist(w))
+ggplot(df, aes(sqrt(counts1),sqrt(counts2), colour = (weights))) + geom_point() + 
+  theme_classic() + scale_color_continuous(type = "viridis") +
+  labs(x = "sqrt ( cell type A )", y = "sqrt ( cell type B )", colour = "weights")
+
+```
+
+
+## Look at p-value histogram
+
+
+```{r pvalueHistogram}
+hist(spicyTest$p.value[,2], breaks = 20)
+```
+
+
+```{r}
+sessionInfo()
+```
+
+
+

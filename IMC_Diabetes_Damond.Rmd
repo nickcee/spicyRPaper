@@ -1,0 +1,174 @@
+---
+title: "IMC Diabetes Damond"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, fig.path = "../Output/Figures/", dev=c('png','pdf','svg'))
+```
+
+## Load libraries
+
+```{r message=FALSE}
+library(tidyverse)
+library(spicyR)
+library(ggrepel)
+```
+
+
+# Load data
+
+The segmented cells experiment can be created with "createSegmentedCellsDiabetes.R" file which includes instructions for downloading the data.
+
+```{r}
+load("../Data/cellExpDiabetes.RData")
+
+ph <- imagePheno(cellExp)
+ph$case <- factor(ph$case)
+
+imagePheno(cellExp) <- ph
+
+cellProp <- table(imageID(cellExp),cellType(cellExp))
+dropCellTypes <- names(which(colMeans(cellProp==0)>0.5))
+
+
+```
+
+
+# Run spicyR using mixed effects model
+
+```{r}
+t1 <- Sys.time()
+
+
+spicyTest <- spicy(cellExp, 
+                   condition = "stage", 
+                   subject = "case",
+                   BPPARAM = BiocParallel::MulticoreParam(50),
+                   includeZeroCells = FALSE,
+                   Rs = seq(10,100,10),
+                   weights = TRUE
+                  )
+
+t2 <- Sys.time()
+
+t2 - t1
+
+```
+
+
+```{r}
+top <- topPairs(spicyTest, n = 100, coef = 2)
+top[top$from %in% c("alpha", "beta", "delta", "Th", "Tc", "neutrophil", "macrophage") & top$to %in% c("alpha", "beta", "delta", "Th", "Tc", "neutrophil", "macrophage"),]
+```
+
+```{r signifPlot, fig.height=5, fig.width=5}
+signifPlot(spicyTest, breaks=c(-3, 3, 0.5), fdr = FALSE, marksToPlot = c("alpha", "beta", "delta", "Th", "Tc", "neutrophil", "macrophage"))
+
+```
+
+## View weights
+
+```{r weights, fig.height=5, fig.width=7}
+
+w <- spicyTest$weights
+nCells <- spicyTest$nCells
+m1 <- unlist(lapply(strsplit(names(w), "__"), function(x)x[1]))
+m2 <- unlist(lapply(strsplit(names(w), "__"), function(x)x[2]))
+counts1 <- as.vector(nCells[,m1])
+counts2 <- as.vector(nCells[,m2])
+df <- data.frame(counts1, counts2, weights = unlist(w))
+ggplot(df, aes(sqrt(counts1),sqrt(counts2), colour = log10(weights)^(1/1))) + geom_point() + 
+  theme_classic() + scale_color_continuous(type = "viridis") +
+  xlim(0,65) + ylim(0,65)+
+  labs(x = "sqrt ( cell type A )", y = "sqrt ( cell type B )", colour = "log10 ( weights )")
+
+```
+
+## Explore cytotoxix t cells vs beta cells relationship with diabetes.
+
+```{r TcVsBeta, fig.height=5, fig.width=7}
+df <- data.frame(u = spicyTest$pairwiseAssoc$Tc__beta, subject = imagePheno(cellExp)$case, stage = imagePheno(cellExp)$stage)
+df <- dplyr::filter(df, stage %in% c("Onset", "Non-diabetic"))
+ggplot(df, aes(x = paste(stage,"\n", "(", subject, ")", sep = ""), y = u)) + geom_hline(yintercept = 0, linetype = 2) + geom_boxplot() + theme_classic() + labs(x = "Stage\n(Case)", y = "u", title = "Tc vs beta cells") 
+
+```
+
+
+
+```{r TcVsBetaStage, fig.height=5, fig.width=2.5}
+df <- data.frame(u = spicyTest$pairwiseAssoc$Tc__beta, subject = imagePheno(cellExp)$case, stage = imagePheno(cellExp)$stage)
+df <- dplyr::filter(df, stage %in% c("Onset", "Non-diabetic"))
+ggplot(df, aes(x = stage, y = u)) + geom_hline(yintercept = 0, linetype = 2) + geom_boxplot() + theme_classic() + labs(x = "Stage", y = "u", title = "Tc vs beta cells") 
+
+```
+
+## Explore Th cells relationship with diabetes.
+
+```{r ThVsTh, fig.height=5, fig.width=7}
+df <- data.frame(u = spicyTest$pairwiseAssoc$Th__Th, subject = imagePheno(cellExp)$case, stage = imagePheno(cellExp)$stage)
+df <- filter(df, stage %in% c("Onset", "Non-diabetic"))
+ggplot(df, aes(x = paste(stage,"\n", "(", subject, ")", sep = ""), y = u)) + geom_hline(yintercept = 0, linetype = 2) + geom_boxplot() + theme_classic() + labs(x = "Stage\n(Case)", y = "Localisation statistic: u", title = "Th vs Th cells") 
+
+```
+
+# Run spicyR using linear model
+
+```{r}
+t1 <- Sys.time()
+
+spicyTestLM <- spicy(cellExp, 
+                   condition = "stage", 
+                   BPPARAM = BiocParallel::MulticoreParam(50),
+                   includeZeroCells = FALSE,
+                   Rs = seq(10,100,10),
+                   weights = TRUE
+                  )
+
+t2 <- Sys.time()
+
+t2 - t1
+
+```
+
+
+```{r}
+top <- topPairs(spicyTestLM, n = 1000, coef = 2)
+top[top$from %in% c("alpha", "beta", "delta", "Th", "Tc", "neutrophil", "macrophage") & top$to %in% c("alpha", "beta", "delta", "Th", "Tc", "neutrophil", "macrophage"),]
+```
+
+
+```{r signifPlotLM, fig.height=5, fig.width=5}
+signifPlot(spicyTestLM, fdr = FALSE, marksToPlot = c("alpha", "beta","delta", "Th", "Tc", "neutrophil", "macrophage"), breaks = c(-10, 10, 0.5))
+
+```
+
+# Compare results
+
+```{r lmVslmm, fig.height=6, fig.width=8}
+
+df <- data.frame(LM = spicyTestLM$p.value[,2], LMM = spicyTest$p.value[,2], pairs = rownames(spicyTestLM$p.value))
+df <- filter(df, spicyTestLM$comparisons$from%in%c("alpha", "beta", "delta", "Th", "Tc", "neutrophil", "macrophage") & spicyTestLM$comparisons$to%in%c("alpha", "beta", "delta", "Th", "Tc", "neutrophil", "macrophage"))
+
+
+ggplot(df, aes(-log10(LMM), -log10(LM), label = pairs)) + geom_point() + theme_classic() + geom_abline(linetype = 2)
+
+dfsub <- dplyr::filter(df, -log10(LMM) > 1.5 | -log10(LM) > 5)
+
+ggplot(df, aes(-log10(LMM), -log10(LM), label = pairs)) + geom_point() + theme_classic() + geom_abline(linetype = 2) + geom_label_repel(data = dfsub[order(dfsub$LM),], size = 3, max.overlaps = 30, box.padding = 0.25) + ylim(-1, 18)
+
+```
+
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
