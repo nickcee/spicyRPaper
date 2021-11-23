@@ -1,21 +1,18 @@
-##########################
-### Simulation Figures ###
-#########################
+###################
+### Simulations ###
+###################
 
-Scripts:
-simulationRun.R - performs simulations as described in the manuscript
-simulationPlot.R - reproduces results of the simulations presented in the manuscript
+baseSim.R - simulation of weights vs no weights (Fig. 3A, 3B)
+simMultiCounts.R - simulations with varying cell counts (Fig. S3A, S3B)
+manyRsim.R - simulations with varying cell co-localisations (Fig. S4A, S4B)
+timSim.R - timing of spicyR (Table S1)
 
-Data:
-resultsTW.Rdata - results of simulations without weights
-resultsFW.Rdata - results of simulations with weights
 
-########################
-### Diabetes Figures ###
-########################
+################################
+### Applications to Datasets ###
+################################
 
-Scripts:
-diabetesHeatmap.R - applies SpicyR to diabetes dataset and produces the heatmap presented in the manuscript
+IMC_Diabetes_Damond.Rmd - application to Damond et al. 2019 (Fig. 4A, 4C, 4D)
+IMC_BreastCancer_Jackson.Rmd - applicaiton to Jackson et al. 2020
+CODEX_ColonCancer_Schurch.Rmd - application to Schurch et al. 2020
 
-Data:
-data.rds - single cell data from Damond et al. 2019, converted into a SegmentedCells object for use with SpicyR
